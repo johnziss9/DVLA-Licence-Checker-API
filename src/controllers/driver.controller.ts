@@ -1,233 +1,280 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppDataSource } from '../config/database';
 import { Driver } from '../models/driver.entity';
-import { LicenceCheck } from '../models/licence-check.entity';
+import { UserRole } from '../models/user.entity';
 
-const driverRepository = AppDataSource.getRepository(Driver);
-const licenceCheckRepository = AppDataSource.getRepository(LicenceCheck);
+interface AuthRequest extends Request {
+    user?: {
+        id: string;
+        email: string;
+        organisationId: string;
+        role: UserRole;
+    };
+}
 
-// Get all drivers for the current organisation
-export const getAllDrivers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-        const organisationId = req.user?.organisationId;
+export class DriverController {
+    async getAllDrivers(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+        try {
+            const organisationId = req.user?.organisationId;
+            const driverRepository = AppDataSource.getRepository(Driver);
 
-        const drivers = await driverRepository.find({
-            where: { organisationId, isActive: true },
-            order: { lastName: 'ASC', firstName: 'ASC' }
-        });
+            const drivers = await driverRepository.find({
+                where: { organisationId, active: true },
+                order: { createdAt: 'DESC' }
+            });
 
-        res.status(200).json(drivers);
-    } catch (error) {
-        console.error('Error fetching drivers:', error);
-        res.status(500).json({ message: 'Server error' });
-        next(error);
-    }
-};
-
-// Get a single driver by ID
-export const getDriverById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-        const { id } = req.params;
-        const organisationId = req.user?.organisationId;
-
-        const driver = await driverRepository.findOne({
-            where: { id, organisationId },
-            relations: ['licenceChecks']
-        });
-
-        if (!driver) {
-            res.status(404).json({ message: 'Driver not found' });
-            return;
+            res.json({
+                message: 'Drivers retrieved successfully',
+                data: drivers,
+                count: drivers.length
+            });
+        } catch (error) {
+            next(error);
         }
-
-        res.status(200).json(driver);
-    } catch (error) {
-        console.error('Error fetching driver:', error);
-        res.status(500).json({ message: 'Server error' });
-        next(error);
     }
-};
 
-// Create a new driver
-export const createDriver = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-        const organisationId = req.user?.organisationId;
-        const {
-            firstName,
-            lastName,
-            drivingLicenceNumber,
-            dateOfBirth,
-            addressLine1,
-            addressLine2,
-            city,
-            postcode,
-            phoneNumber,
-            email
-        } = req.body;
+    async getDriverById(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+        try {
+            const { id } = req.params;
+            const organisationId = req.user?.organisationId;
+            const driverRepository = AppDataSource.getRepository(Driver);
 
-        // Check if driver with same licence number already exists
-        const existingDriver = await driverRepository.findOne({
-            where: { drivingLicenceNumber, organisationId }
-        });
+            const driver = await driverRepository.findOne({
+                where: { id, organisationId }
+            });
 
-        if (existingDriver) {
-            res.status(400).json({ message: 'Driver with this licence number already exists' });
-            return;
+            if (!driver) {
+                res.status(404).json({ error: 'Driver not found' });
+                return;
+            }
+
+            res.json({
+                message: 'Driver retrieved successfully',
+                data: driver
+            });
+        } catch (error) {
+            next(error);
         }
-
-        // Create new driver
-        const newDriver = driverRepository.create({
-            firstName,
-            lastName,
-            drivingLicenceNumber,
-            dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
-            addressLine1,
-            addressLine2,
-            city,
-            postcode,
-            phoneNumber,
-            email,
-            organisationId,
-            isActive: true,
-            consentProvided: false
-        });
-
-        await driverRepository.save(newDriver);
-
-        res.status(201).json({
-            message: 'Driver created successfully',
-            driver: newDriver
-        });
-    } catch (error) {
-        console.error('Error creating driver:', error);
-        res.status(500).json({ message: 'Server error' });
-        next(error);
     }
-};
 
-// Update a driver
-export const updateDriver = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-        const { id } = req.params;
-        const organisationId = req.user?.organisationId;
+    async createDriver(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+        try {
+            const organisationId = req.user?.organisationId;
+            const driverRepository = AppDataSource.getRepository(Driver);
 
-        const driver = await driverRepository.findOne({
-            where: { id, organisationId }
-        });
+            const {
+                firstName,
+                lastName,
+                licenceNumber, // Changed from drivingLicenceNumber to licenceNumber
+                dateOfBirth,
+                email,
+                phone,
+                addressLine1,
+                addressLine2,
+                city,
+                postcode
+            } = req.body;
 
-        if (!driver) {
-            res.status(404).json({ message: 'Driver not found' });
-            return;
+            // Check if licence number already exists for this organisation
+            const existingDriver = await driverRepository.findOne({
+                where: { licenceNumber, organisationId }
+            });
+
+            if (existingDriver) {
+                res.status(400).json({ error: 'Driver with this licence number already exists' });
+                return;
+            }
+
+            const newDriver = driverRepository.create({
+                firstName,
+                lastName,
+                licenceNumber,
+                dateOfBirth: new Date(dateOfBirth),
+                email,
+                phone,
+                addressLine1,
+                addressLine2,
+                city,
+                postcode,
+                organisationId,
+                active: true
+            });
+
+            const savedDriver = await driverRepository.save(newDriver);
+
+            res.status(201).json({
+                message: 'Driver created successfully',
+                data: savedDriver
+            });
+        } catch (error) {
+            next(error);
         }
-
-        driverRepository.merge(driver, req.body);
-        const updatedDriver = await driverRepository.save(driver);
-
-        res.status(200).json({
-            message: 'Driver updated successfully',
-            driver: updatedDriver
-        });
-    } catch (error) {
-        console.error('Error updating driver:', error);
-        res.status(500).json({ message: 'Server error' });
-        next(error);
     }
-};
 
-// Record driver consent
-export const recordConsent = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-        const { id } = req.params;
-        const organisationId = req.user?.organisationId;
+    async updateDriver(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+        try {
+            const { id } = req.params;
+            const organisationId = req.user?.organisationId;
+            const driverRepository = AppDataSource.getRepository(Driver);
 
-        const driver = await driverRepository.findOne({
-            where: { id, organisationId }
-        });
+            const driver = await driverRepository.findOne({
+                where: { id, organisationId }
+            });
 
-        if (!driver) {
-            res.status(404).json({ message: 'Driver not found' });
-            return;
+            if (!driver) {
+                res.status(404).json({ error: 'Driver not found' });
+                return;
+            }
+
+            const {
+                firstName,
+                lastName,
+                licenceNumber,
+                dateOfBirth,
+                email,
+                phone,
+                addressLine1,
+                addressLine2,
+                city,
+                postcode
+            } = req.body;
+
+            // Update driver properties
+            if (firstName) driver.firstName = firstName;
+            if (lastName) driver.lastName = lastName;
+            if (licenceNumber) driver.licenceNumber = licenceNumber;
+            if (dateOfBirth) driver.dateOfBirth = new Date(dateOfBirth);
+            if (email) driver.email = email;
+            if (phone) driver.phone = phone;
+            if (addressLine1) driver.addressLine1 = addressLine1;
+            if (addressLine2) driver.addressLine2 = addressLine2;
+            if (city) driver.city = city;
+            if (postcode) driver.postcode = postcode;
+
+            const updatedDriver = await driverRepository.save(driver);
+
+            res.json({
+                message: 'Driver updated successfully',
+                data: updatedDriver
+            });
+        } catch (error) {
+            next(error);
         }
-
-        const consentDate = new Date();
-        const consentExpiryDate = new Date();
-        consentExpiryDate.setFullYear(consentExpiryDate.getFullYear() + 3);
-
-        driver.consentProvided = true;
-        driver.consentDate = consentDate;
-        driver.consentExpiryDate = consentExpiryDate;
-
-        await driverRepository.save(driver);
-
-        res.status(200).json({
-            message: 'Driver consent recorded successfully',
-            consentDate,
-            consentExpiryDate
-        });
-    } catch (error) {
-        console.error('Error recording consent:', error);
-        res.status(500).json({ message: 'Server error' });
-        next(error);
     }
-};
 
-// Delete (deactivate) a driver
-export const deleteDriver = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-        const { id } = req.params;
-        const organisationId = req.user?.organisationId;
+    async recordConsent(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+        try {
+            const { id } = req.params;
+            const { consentReference } = req.body;
+            const organisationId = req.user?.organisationId;
+            const driverRepository = AppDataSource.getRepository(Driver);
 
-        const driver = await driverRepository.findOne({
-            where: { id, organisationId }
-        });
+            const driver = await driverRepository.findOne({
+                where: { id, organisationId }
+            });
 
-        if (!driver) {
-            res.status(404).json({ message: 'Driver not found' });
-            return;
+            if (!driver) {
+                res.status(404).json({ error: 'Driver not found' });
+                return;
+            }
+
+            const consentDate = new Date();
+            const consentExpiry = new Date();
+            consentExpiry.setFullYear(consentExpiry.getFullYear() + 3); // 3 years validity
+
+            driver.consentProvided = true;
+            driver.consentDate = consentDate;
+            driver.consentExpiry = consentExpiry;
+            if (consentReference) {
+                driver.consentReference = consentReference;
+            }
+
+            const updatedDriver = await driverRepository.save(driver);
+
+            res.json({
+                message: 'Driver consent recorded successfully',
+                data: {
+                    id: updatedDriver.id,
+                    consentProvided: updatedDriver.consentProvided,
+                    consentDate: updatedDriver.consentDate,
+                    consentExpiry: updatedDriver.consentExpiry,
+                    consentReference: updatedDriver.consentReference
+                }
+            });
+        } catch (error) {
+            next(error);
         }
-
-        driver.isActive = false;
-        await driverRepository.save(driver);
-
-        res.status(200).json({
-            message: 'Driver deactivated successfully'
-        });
-    } catch (error) {
-        console.error('Error deleting driver:', error);
-        res.status(500).json({ message: 'Server error' });
-        next(error);
     }
-};
 
-// Get the latest licence check for a driver
-export const getLatestLicenceCheck = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-        const { id } = req.params;
-        const organisationId = req.user?.organisationId;
+    async deleteDriver(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+        try {
+            const { id } = req.params;
+            const organisationId = req.user?.organisationId;
+            const driverRepository = AppDataSource.getRepository(Driver);
 
-        const driver = await driverRepository.findOne({
-            where: { id, organisationId }
-        });
+            const driver = await driverRepository.findOne({
+                where: { id, organisationId }
+            });
 
-        if (!driver) {
-            res.status(404).json({ message: 'Driver not found' });
-            return;
+            if (!driver) {
+                res.status(404).json({ error: 'Driver not found' });
+                return;
+            }
+
+            // Soft delete
+            driver.active = false;
+            await driverRepository.save(driver);
+
+            res.json({
+                message: 'Driver deactivated successfully'
+            });
+        } catch (error) {
+            next(error);
         }
-
-        const latestCheck = await licenceCheckRepository.findOne({
-            where: { driverId: id },
-            order: { checkDate: 'DESC' }
-        });
-
-        if (!latestCheck) {
-            res.status(404).json({ message: 'No licence checks found for this driver' });
-            return;
-        }
-
-        res.status(200).json(latestCheck);
-    } catch (error) {
-        console.error('Error fetching latest licence check:', error);
-        res.status(500).json({ message: 'Server error' });
-        next(error);
     }
-};
+
+    async getLatestLicenceCheck(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+        try {
+            const { id } = req.params;
+            const organisationId = req.user?.organisationId;
+            const driverRepository = AppDataSource.getRepository(Driver);
+
+            const driver = await driverRepository.findOne({
+                where: { id, organisationId },
+                relations: ['licenceChecks'],
+                order: {
+                    licenceChecks: {
+                        checkDate: 'DESC'
+                    }
+                }
+            });
+
+            if (!driver) {
+                res.status(404).json({ error: 'Driver not found' });
+                return;
+            }
+
+            const latestCheck = driver.licenceChecks && driver.licenceChecks.length > 0
+                ? driver.licenceChecks[0]
+                : null;
+
+            res.json({
+                message: 'Latest licence check retrieved successfully',
+                data: {
+                    driver: {
+                        id: driver.id,
+                        fullName: driver.fullName,
+                        licenceNumber: driver.licenceNumber,
+                        lastLicenceCheck: driver.lastLicenceCheck,
+                        riskLevel: driver.riskLevel
+                    },
+                    latestCheck
+                }
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+}
+
+export default new DriverController();

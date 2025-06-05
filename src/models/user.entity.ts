@@ -1,10 +1,11 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, BeforeInsert, BeforeUpdate } from 'typeorm';
 import { Exclude } from 'class-transformer';
 import * as bcrypt from 'bcrypt';
-import { organisation } from './organisation.entity';
+import { Organisation } from './organisation.entity';
 
 export enum UserRole {
     ADMIN = 'admin',
+    MANAGER = 'manager',
     USER = 'user'
 }
 
@@ -36,9 +37,9 @@ export class User {
     @Column()
     organisationId: string;
 
-    @ManyToOne(() => organisation)
+    @ManyToOne(() => Organisation)
     @JoinColumn({ name: 'organisationId' })
-    organisation: organisation;
+    organisation: Organisation;
 
     @Column({ default: true })
     isActive: boolean;
