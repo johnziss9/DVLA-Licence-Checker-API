@@ -7,7 +7,7 @@ export enum organisationType {
 }
 
 @Entity('organisations')
-export class organisation {
+export class Organisation {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
