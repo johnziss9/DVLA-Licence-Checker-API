@@ -53,6 +53,9 @@ export class Driver {
     @Column({ name: 'consent_reference', nullable: true })
     consentReference: string;
 
+    @Column({ name: 'last_medical_date', type: 'date', nullable: true })
+    lastMedicalDate: Date | null;
+
     // LICENCE TRACKING FIELDS
     @Column({ name: 'licence_status', type: 'enum', enum: ['unknown', 'valid', 'invalid', 'expired'], default: 'unknown' })
     licenceStatus: 'unknown' | 'valid' | 'invalid' | 'expired';
@@ -65,6 +68,9 @@ export class Driver {
 
     @Column({ name: 'penalty_points', default: 0 })
     penaltyPoints: number;
+
+    @Column({ name: 'licence_issue_date', type: 'date', nullable: true })
+    licenceIssueDate: Date | null;
 
     @Column({ name: 'cpc_expiry_date', type: 'date', nullable: true })
     cpcExpiryDate: Date | null;
