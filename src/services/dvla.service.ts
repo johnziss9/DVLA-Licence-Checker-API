@@ -80,6 +80,22 @@ export interface DVLALicenceResponse {
 }
 
 export interface DVLACategory {
+    categoryCode: string; // What DVLA actually returns (e.g., "C", "D1", "CE")
+    categoryLegalLiteral: string; // Description (e.g., "Medium sized goods vehicles")
+    categoryType?: string; // "Full" or "Provisional" 
+    validFromDate?: string; // When category became valid
+    validToDate?: string; // When category expires (if applicable)
+    expiryDate?: string; // Alternative name for validToDate
+    fromDate?: string; // Alternative name for validFromDate
+    restrictions?: Array<{
+        restrictionCode: string;
+        restrictionLiteral: string;
+    }>;
+    provisionalEntitlement?: boolean;
+}
+
+// For backward compatibility, we keep the legacy interface:
+export interface DVLACategoryLegacy {
     code: string;
     category: string;
     validFromDate: string;

@@ -1,4 +1,3 @@
-// src/controllers/licence-check.controller.ts
 import { Request, Response, NextFunction } from 'express';
 import licenceCheckService from '../services/licence-check.service';
 import dvlaService from '../services/dvla.service';
