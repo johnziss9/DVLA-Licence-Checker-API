@@ -1,3 +1,7 @@
+if (process.env.APPINSIGHTS_INSTRUMENTATIONKEY) {
+    require('applicationinsights').setup().start();
+}
+
 import 'reflect-metadata';
 import app from './app';
 import { AppDataSource } from './config/database';
